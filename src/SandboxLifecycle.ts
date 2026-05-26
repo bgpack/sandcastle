@@ -1,6 +1,6 @@
 import { exec } from "node:child_process";
 import { promisify } from "node:util";
-import { Deferred, Effect } from "effect";
+import { Deferred, Duration, Effect, Schedule } from "effect";
 import { Display } from "./Display.js";
 import {
   CommitCollectionTimeoutError,
@@ -23,6 +23,24 @@ const HOOK_TIMEOUT_MS = 60_000;
 const COMMIT_COLLECTION_TIMEOUT_MS = 30_000;
 const MERGE_TO_HOST_TIMEOUT_MS = 30_000;
 
+/** Number of times a transient git setup exec is retried after the first attempt. */
+const GIT_SETUP_MAX_RETRIES = 2;
+/** Delay between git setup retries — long enough to let a transient exec race clear. */
+const GIT_SETUP_RETRY_DELAY_MS = 250;
+
+/**
+ * Exit codes that indicate the shell could not exec the command rather than the
+ * command itself failing — symptoms of a transient race under heavy container
+ * load (e.g. overlayfs not yet ready, or the process being killed). Worth a retry.
+ * 126: command found but not executable / exec failed. 137: killed (128 + SIGKILL).
+ */
+const TRANSIENT_EXEC_EXIT_CODES = new Set([126, 137]);
+
+const isTransientExecError = (err: ExecError | GitSetupTimeoutError): boolean =>
+  err._tag === "ExecError" &&
+  err.exitCode !== undefined &&
+  TRANSIENT_EXEC_EXIT_CODES.has(err.exitCode);
+
 const execOk = (
   sandbox: SandboxService,
   command: string,
@@ -33,6 +51,7 @@ const execOk = (
       ? Effect.fail(
           new ExecError({
             command,
+            exitCode: result.exitCode,
             message: `Command failed (exit ${result.exitCode}): ${command}\n${result.stderr}`,
           }),
         )
@@ -54,6 +73,13 @@ const execOkWithGitTimeout = (
           command,
         }),
     ),
+    // Each attempt is bounded by its own timeout (above); retry only transient
+    // exec races, so a genuine git error or a hung exec still fails fast.
+    Effect.retry({
+      while: isTransientExecError,
+      times: GIT_SETUP_MAX_RETRIES,
+      schedule: Schedule.spaced(Duration.millis(GIT_SETUP_RETRY_DELAY_MS)),
+    }),
   );
 
 const execAsync = promisify(exec);
