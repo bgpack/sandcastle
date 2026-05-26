@@ -19,6 +19,35 @@
 import * as sandcastle from "@ai-hero/sandcastle";
 import { docker } from "@ai-hero/sandcastle/sandboxes/docker";
 
+const extractPlanIssues = (
+  stdout: string,
+): { id: string; title: string; branch: string }[] => {
+  const candidates: string[] = [];
+  const planMatch = stdout.match(/<plan>([\s\S]*?)<\/plan>/i);
+  if (planMatch?.[1]) candidates.push(planMatch[1]);
+  const fencedJsonMatch = stdout.match(/```json\s*([\s\S]*?)```/i);
+  if (fencedJsonMatch?.[1]) candidates.push(fencedJsonMatch[1]);
+  const firstObjectMatch = stdout.match(/\{[\s\S]*?\}/);
+  if (firstObjectMatch?.[0]) candidates.push(firstObjectMatch[0]);
+
+  for (const candidate of candidates) {
+    try {
+      const parsed = JSON.parse(candidate) as {
+        issues?: { id: string; title: string; branch: string }[];
+      };
+      if (Array.isArray(parsed.issues)) {
+        return parsed.issues;
+      }
+    } catch {
+      // Try the next candidate.
+    }
+  }
+
+  throw new Error(
+    "Planning agent did not produce parseable plan JSON.\n\n" + stdout,
+  );
+};
+
 // ---------------------------------------------------------------------------
 // Configuration
 // ---------------------------------------------------------------------------
@@ -62,22 +91,12 @@ for (let iteration = 1; iteration <= MAX_ITERATIONS; iteration++) {
     // not write code.
     maxIterations: 1,
     // Opus for planning: dependency analysis benefits from deeper reasoning.
-    agent: sandcastle.claudeCode("claude-opus-4-6"),
+    agent: sandcastle.claudeCode("claude-opus-4-7"),
     promptFile: "./.sandcastle/plan-prompt.md",
   });
 
-  // Extract the <plan>…</plan> block from the agent's stdout.
-  const planMatch = plan.stdout.match(/<plan>([\s\S]*?)<\/plan>/);
-  if (!planMatch) {
-    throw new Error(
-      "Planning agent did not produce a <plan> tag.\n\n" + plan.stdout,
-    );
-  }
-
-  // The plan JSON contains an array of issues, each with id, title, branch.
-  const { issues } = JSON.parse(planMatch[1]!) as {
-    issues: { id: string; title: string; branch: string }[];
-  };
+  // Parse planner output robustly: <plan> tags, fenced JSON, or raw JSON.
+  const issues = extractPlanIssues(plan.stdout);
 
   if (issues.length === 0) {
     // No unblocked work — either everything is done or everything is blocked.
@@ -190,9 +209,7 @@ for (let iteration = 1; iteration <= MAX_ITERATIONS; iteration++) {
       // A markdown list of branch names, one per line.
       BRANCHES: completedBranches.map((b) => `- ${b}`).join("\n"),
       // A markdown list of issue IDs and titles, one per line.
-      ISSUES: completedIssues
-        .map((i) => `- ${i.id}: ${i.title}`)
-        .join("\n"),
+      ISSUES: completedIssues.map((i) => `- ${i.id}: ${i.title}`).join("\n"),
     },
   });
 

@@ -3,7 +3,7 @@
  *
  * Usage:
  *   import { docker } from "sandcastle/sandboxes/docker";
- *   await run({ agent: claudeCode("claude-opus-4-6"), sandbox: docker() });
+ *   await run({ agent: claudeCode("claude-opus-4-7"), sandbox: docker() });
  */
 
 import {
@@ -31,6 +31,7 @@ import {
   resolveUserMounts,
   processFileMountParents,
 } from "../mountUtils.js";
+import { BoundedTail, MAX_TAIL_CHARS } from "../boundedTail.js";
 
 export interface DockerOptions {
   /** Docker image name (default: derived from repo directory name). */
@@ -74,6 +75,51 @@ export interface DockerOptions {
    * When omitted, Docker's default bridge network is used.
    */
   readonly network?: string | readonly string[];
+  /**
+   * Supplementary groups to add the container user to, via `--group-add`.
+   *
+   * Accepts group names or numeric GIDs:
+   *
+   * - `["docker"]` → `--group-add docker`
+   * - `[999]` → `--group-add 999`
+   * - `["docker", 999]` → `--group-add docker --group-add 999`
+   *
+   * Useful for granting access to a bind-mounted Docker socket (Docker-outside-of-Docker).
+   * When omitted, no `--group-add` flags are added.
+   */
+  readonly groups?: readonly (string | number)[];
+  /**
+   * Host devices to expose to the container, via `--device`.
+   *
+   * Each entry is a full device spec in `host[:container[:permissions]]` form:
+   *
+   * - `["/dev/kvm"]` → `--device /dev/kvm`
+   * - `["/dev/sda:/dev/xvda:rwm"]` → `--device /dev/sda:/dev/xvda:rwm`
+   * - `["/dev/kvm", "/dev/fuse"]` → `--device /dev/kvm --device /dev/fuse`
+   *
+   * When omitted, no `--device` flags are added.
+   */
+  readonly devices?: readonly string[];
+  /**
+   * Maximum number of characters of streamed `exec` output retained per stream
+   * (stdout and stderr) when an `onLine` callback is supplied (default: 64KiB).
+   *
+   * Output is delivered live to `onLine` regardless; this only bounds the tail
+   * returned in `ExecResult`, preventing a long-running agent's output from
+   * overflowing V8's max string length and crashing the run.
+   */
+  readonly maxOutputTailChars?: number;
+  /**
+   * Limit the CPU resources available to the container, via `--cpus`.
+   *
+   * Maps directly to `docker run --cpus`. Accepts fractional values:
+   *
+   * - `2` → `--cpus 2` (at most 2 CPUs)
+   * - `1.5` → `--cpus 1.5` (at most 1.5 CPUs)
+   *
+   * When omitted, no `--cpus` flag is added and the container is unconstrained.
+   */
+  readonly cpus?: number;
 }
 
 /**
@@ -85,6 +131,7 @@ export interface DockerOptions {
 export const docker = (options?: DockerOptions): SandboxProvider => {
   const configuredImageName = options?.imageName;
   const selinuxLabel = options?.selinuxLabel ?? "z";
+  const maxOutputTailChars = options?.maxOutputTailChars ?? MAX_TAIL_CHARS;
   const sandboxHomedir = "/home/agent";
   const userMounts = options?.mounts
     ? resolveUserMounts(options.mounts, sandboxHomedir)
@@ -142,6 +189,9 @@ export const docker = (options?: DockerOptions): SandboxProvider => {
             workdir: worktreePath,
             user: `${containerUid}:${containerGid}`,
             network: options?.network,
+            groups: options?.groups,
+            devices: options?.devices,
+            cpus: options?.cpus,
             selinuxLabel,
           },
         ),
@@ -229,37 +279,46 @@ export const docker = (options?: DockerOptions): SandboxProvider => {
               proc.stdin!.end();
             }
 
-            const stdoutChunks: string[] = [];
-            const stderrChunks: string[] = [];
-
-            if (opts?.onLine) {
-              const onLine = opts.onLine;
-              const rl = createInterface({ input: proc.stdout! });
-              rl.on("line", (line) => {
-                stdoutChunks.push(line);
-                onLine(line);
-              });
-            } else {
-              proc.stdout!.on("data", (chunk: Buffer) => {
-                stdoutChunks.push(chunk.toString());
-              });
-            }
-
-            proc.stderr!.on("data", (chunk: Buffer) => {
-              stderrChunks.push(chunk.toString());
-            });
-
             proc.on("error", (error) => {
               reject(new Error(`docker exec failed: ${error.message}`));
             });
 
-            proc.on("close", (code) => {
-              resolve({
-                stdout: stdoutChunks.join(opts?.onLine ? "\n" : ""),
-                stderr: stderrChunks.join(""),
-                exitCode: code ?? 0,
+            if (opts?.onLine) {
+              const onLine = opts.onLine;
+              const stdoutTail = new BoundedTail(maxOutputTailChars, "\n");
+              const stderrTail = new BoundedTail(maxOutputTailChars, "");
+              const rl = createInterface({ input: proc.stdout! });
+              rl.on("line", (line) => {
+                stdoutTail.push(line);
+                onLine(line);
               });
-            });
+              proc.stderr!.on("data", (chunk: Buffer) => {
+                stderrTail.push(chunk.toString());
+              });
+              proc.on("close", (code) => {
+                resolve({
+                  stdout: stdoutTail.toString(),
+                  stderr: stderrTail.toString(),
+                  exitCode: code ?? 0,
+                });
+              });
+            } else {
+              const stdoutChunks: string[] = [];
+              const stderrChunks: string[] = [];
+              proc.stdout!.on("data", (chunk: Buffer) => {
+                stdoutChunks.push(chunk.toString());
+              });
+              proc.stderr!.on("data", (chunk: Buffer) => {
+                stderrChunks.push(chunk.toString());
+              });
+              proc.on("close", (code) => {
+                resolve({
+                  stdout: stdoutChunks.join(""),
+                  stderr: stderrChunks.join(""),
+                  exitCode: code ?? 0,
+                });
+              });
+            }
           });
         },
 

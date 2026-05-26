@@ -12,13 +12,8 @@ import type { SandboxService } from "./SandboxFactory.js";
 import { SandboxFactory, SANDBOX_REPO_DIR } from "./SandboxFactory.js";
 import { withSandboxLifecycle, type SandboxHooks } from "./SandboxLifecycle.js";
 import type { AgentProvider, IterationUsage } from "./AgentProvider.js";
+import type { Timeouts } from "./run.js";
 import { TextDeltaBuffer } from "./TextDeltaBuffer.js";
-import {
-  hostSessionStore,
-  sandboxSessionStore,
-  transferSession,
-} from "./SessionStore.js";
-import { SessionPaths } from "./SessionPaths.js";
 
 export type { ParsedStreamEvent, IterationUsage } from "./AgentProvider.js";
 
@@ -127,9 +122,7 @@ const invokeAgent = (
           errorDetail = resultText;
         }
         if (!errorDetail.trim()) {
-          const lines = execResult.stdout
-            .split("\n")
-            .filter((l) => l.trim());
+          const lines = execResult.stdout.split("\n").filter((l) => l.trim());
           errorDetail = lines.slice(-20).join("\n");
         }
         return yield* Effect.fail(
@@ -195,6 +188,8 @@ export interface OrchestrateOptions {
   readonly signal?: AbortSignal;
   /** When true, skip prompt expansion (shell expression evaluation). Set for dynamic inline prompts. */
   readonly skipPromptExpansion?: boolean;
+  /** Override default timeouts for built-in lifecycle steps. Unset keys keep their defaults. */
+  readonly timeouts?: Timeouts;
 }
 
 /** Per-iteration result carrying an optional session ID. */
@@ -224,7 +219,7 @@ export const orchestrate = (
 ): Effect.Effect<
   OrchestrateResult,
   SandboxError,
-  SandboxFactory | Display | SessionPaths | AgentStreamEmitter
+  SandboxFactory | Display | AgentStreamEmitter
 > => {
   const idleTimeoutMs =
     (options.idleTimeoutSeconds ?? DEFAULT_IDLE_TIMEOUT_SECONDS) * 1000;
@@ -232,7 +227,6 @@ export const orchestrate = (
     const factory = yield* SandboxFactory;
     const display = yield* Display;
     const streamEmitter = yield* AgentStreamEmitter;
-    const { hostProjectsDir, sandboxProjectsDir } = yield* SessionPaths;
     const { hostRepoDir, iterations, hooks, prompt, branch, provider } =
       options;
     let completionSignals: string[];
@@ -273,23 +267,31 @@ export const orchestrate = (
               hostWorktreePath,
               applyToHost,
               signal: options.signal,
+              timeouts: options.timeouts,
             },
             (ctx) =>
               Effect.gen(function* () {
                 // Resume session: transfer JSONL from host to sandbox before iteration 1
                 const iterationResumeSession =
                   i === 1 ? options.resumeSession : undefined;
-                if (iterationResumeSession && bindMountHandle) {
+                if (
+                  iterationResumeSession &&
+                  bindMountHandle &&
+                  provider.sessionStorage
+                ) {
                   yield* display.status(label("Resuming session"), "info");
-                  const sbStore = sandboxSessionStore(
+                  const sbStore = provider.sessionStorage.sandboxStore(
                     ctx.sandboxRepoDir,
                     bindMountHandle,
-                    sandboxProjectsDir,
                   );
-                  const hStore = hostSessionStore(hostRepoDir, hostProjectsDir);
+                  const hStore = provider.sessionStorage.hostStore(hostRepoDir);
                   yield* Effect.tryPromise({
                     try: () =>
-                      transferSession(hStore, sbStore, iterationResumeSession),
+                      provider.sessionStorage!.transfer(
+                        hStore,
+                        sbStore,
+                        iterationResumeSession,
+                      ),
                     catch: (e) =>
                       new SessionCaptureError({
                         message: `Session resume failed: ${e instanceof Error ? e.message : String(e)}`,
@@ -368,16 +370,25 @@ export const orchestrate = (
                 // Capture session while sandbox is still alive
                 let sessionFilePath: string | undefined;
                 let usage: IterationUsage | undefined;
-                if (provider.captureSessions && sessionId && bindMountHandle) {
+                if (
+                  provider.captureSessions &&
+                  provider.sessionStorage &&
+                  sessionId &&
+                  bindMountHandle
+                ) {
                   yield* display.status(label("Capturing session"), "info");
-                  const sbStore = sandboxSessionStore(
+                  const sbStore = provider.sessionStorage.sandboxStore(
                     ctx.sandboxRepoDir,
                     bindMountHandle,
-                    sandboxProjectsDir,
                   );
-                  const hStore = hostSessionStore(hostRepoDir, hostProjectsDir);
+                  const hStore = provider.sessionStorage.hostStore(hostRepoDir);
                   yield* Effect.tryPromise({
-                    try: () => transferSession(sbStore, hStore, sessionId),
+                    try: () =>
+                      provider.sessionStorage!.transfer(
+                        sbStore,
+                        hStore,
+                        sessionId,
+                      ),
                     catch: (e) =>
                       new SessionCaptureError({
                         message: `Session capture failed: ${e instanceof Error ? e.message : String(e)}`,

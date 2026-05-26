@@ -1,5 +1,5 @@
 import { execSync } from "node:child_process";
-import { mkdtempSync, writeFileSync, existsSync } from "node:fs";
+import { mkdtempSync, writeFileSync, existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { describe, expect, it, beforeEach, afterEach } from "vitest";
@@ -20,14 +20,14 @@ const interactiveOpts = (prompt: string) => ({
 
 describe("buildInteractiveArgs with prompts", () => {
   it("claudeCode includes prompt as positional argument", () => {
-    const provider = claudeCode("claude-opus-4-6");
+    const provider = claudeCode("claude-opus-4-7");
     const args = provider.buildInteractiveArgs!(interactiveOpts("fix the bug"));
     expect(args[0]).toBe("claude");
     expect(args[args.length - 1]).toBe("fix the bug");
   });
 
   it("claudeCode omits prompt when empty string", () => {
-    const provider = claudeCode("claude-opus-4-6");
+    const provider = claudeCode("claude-opus-4-7");
     const args = provider.buildInteractiveArgs!(interactiveOpts(""));
     expect(args[args.length - 1]).not.toBe("");
     expect(args).toContain("--model");
@@ -143,7 +143,7 @@ describe("interactive()", () => {
     });
 
     const result = await interactive({
-      agent: claudeCode("claude-opus-4-6"),
+      agent: claudeCode("claude-opus-4-7"),
       sandbox: provider,
       prompt: "test prompt",
       name: "test-session",
@@ -166,7 +166,7 @@ describe("interactive()", () => {
     });
 
     await interactive({
-      agent: claudeCode("claude-opus-4-6"),
+      agent: claudeCode("claude-opus-4-7"),
       sandbox: provider,
       prompt: "fix the login bug",
     });
@@ -187,7 +187,7 @@ describe("interactive()", () => {
     });
 
     const result = await interactive({
-      agent: claudeCode("claude-opus-4-6"),
+      agent: claudeCode("claude-opus-4-7"),
       sandbox: provider,
       prompt: "add a file",
     });
@@ -202,7 +202,7 @@ describe("interactive()", () => {
     });
 
     const result = await interactive({
-      agent: claudeCode("claude-opus-4-6"),
+      agent: claudeCode("claude-opus-4-7"),
       sandbox: provider,
       prompt: "test",
     });
@@ -232,7 +232,7 @@ describe("interactive()", () => {
 
     await expect(
       interactive({
-        agent: claudeCode("claude-opus-4-6"),
+        agent: claudeCode("claude-opus-4-7"),
         sandbox: provider,
         prompt: "test",
       }),
@@ -257,7 +257,7 @@ describe("interactive()", () => {
     // but head strategy is not supported
     await expect(
       interactive({
-        agent: claudeCode("claude-opus-4-6"),
+        agent: claudeCode("claude-opus-4-7"),
         sandbox: isolatedProvider,
         prompt: "test",
         branchStrategy: { type: "head" },
@@ -274,7 +274,7 @@ describe("interactive()", () => {
     });
 
     await interactive({
-      agent: claudeCode("claude-opus-4-6"),
+      agent: claudeCode("claude-opus-4-7"),
       sandbox: provider,
       prompt: "test",
     });
@@ -297,7 +297,7 @@ describe("interactive()", () => {
     });
 
     const result = await interactive({
-      agent: claudeCode("claude-opus-4-6"),
+      agent: claudeCode("claude-opus-4-7"),
       sandbox: provider,
     });
 
@@ -318,7 +318,7 @@ describe("interactive()", () => {
 
     // This should NOT throw even though promptArgs has keys — there's no prompt to substitute into
     const result = await interactive({
-      agent: claudeCode("claude-opus-4-6"),
+      agent: claudeCode("claude-opus-4-7"),
       sandbox: provider,
       promptArgs: { COMPONENT: "LoginForm" },
     });
@@ -335,7 +335,7 @@ describe("interactive()", () => {
     });
 
     const result = await interactive({
-      agent: claudeCode("claude-opus-4-6"),
+      agent: claudeCode("claude-opus-4-7"),
       sandbox: provider,
     });
 
@@ -358,7 +358,7 @@ describe("interactive()", () => {
     });
 
     await interactive({
-      agent: claudeCode("claude-opus-4-6"),
+      agent: claudeCode("claude-opus-4-7"),
       sandbox: provider,
       promptFile: promptPath,
     });
@@ -374,7 +374,7 @@ describe("interactive()", () => {
 
     await expect(
       interactive({
-        agent: claudeCode("claude-opus-4-6"),
+        agent: claudeCode("claude-opus-4-7"),
         sandbox: provider,
         prompt: "inline prompt",
         promptFile: promptPath,
@@ -393,7 +393,7 @@ describe("interactive()", () => {
     });
 
     await interactive({
-      agent: claudeCode("claude-opus-4-6"),
+      agent: claudeCode("claude-opus-4-7"),
       sandbox: provider,
       promptFile: promptPath,
       promptArgs: { COMPONENT: "LoginForm" },
@@ -422,7 +422,7 @@ describe("interactive()", () => {
     }).trim();
 
     await interactive({
-      agent: claudeCode("claude-opus-4-6"),
+      agent: claudeCode("claude-opus-4-7"),
       sandbox: provider,
       promptFile: promptPath,
     });
@@ -446,7 +446,7 @@ describe("interactive()", () => {
     });
 
     await interactive({
-      agent: claudeCode("claude-opus-4-6"),
+      agent: claudeCode("claude-opus-4-7"),
       sandbox: provider,
       promptFile: promptPath,
     });
@@ -465,7 +465,7 @@ describe("interactive()", () => {
 
     await expect(
       interactive({
-        agent: claudeCode("claude-opus-4-6"),
+        agent: claudeCode("claude-opus-4-7"),
         sandbox: provider,
         promptFile: promptPath,
         promptArgs: { SOURCE_BRANCH: "custom" },
@@ -490,7 +490,7 @@ describe("interactive()", () => {
     }).trim();
 
     const result = await interactive({
-      agent: claudeCode("claude-opus-4-6"),
+      agent: claudeCode("claude-opus-4-7"),
       sandbox: provider,
       prompt: "test",
       branchStrategy: { type: "head" },
@@ -515,7 +515,7 @@ describe("interactive()", () => {
     }).trim();
 
     const result = await interactive({
-      agent: claudeCode("claude-opus-4-6"),
+      agent: claudeCode("claude-opus-4-7"),
       sandbox: provider,
       prompt: "test",
       branchStrategy: { type: "merge-to-head" },
@@ -543,7 +543,7 @@ describe("interactive()", () => {
     });
 
     const result = await interactive({
-      agent: claudeCode("claude-opus-4-6"),
+      agent: claudeCode("claude-opus-4-7"),
       sandbox: provider,
       prompt: "test",
       branchStrategy: { type: "branch", branch: "feature/test-branch" },
@@ -576,7 +576,7 @@ describe("interactive()", () => {
     });
 
     await interactive({
-      agent: claudeCode("claude-opus-4-6"),
+      agent: claudeCode("claude-opus-4-7"),
       sandbox: provider,
       prompt: "test",
       hooks: {
@@ -589,6 +589,29 @@ describe("interactive()", () => {
     expect(executionOrder).toEqual(["interactive-after-hook"]);
   });
 
+  it("removes the worktree when sandbox start fails (no orphan)", async () => {
+    const provider = createBindMountSandboxProvider({
+      name: "failing-create",
+      create: async () => {
+        throw new Error("Image 'sandcastle:test' not found locally");
+      },
+    });
+
+    await expect(
+      interactive({
+        agent: claudeCode("claude-opus-4-7"),
+        sandbox: provider,
+        prompt: "test",
+        branchStrategy: { type: "merge-to-head" },
+      }),
+    ).rejects.toThrow();
+
+    // The worktree must not be left orphaned on disk.
+    const worktreesDir = join(hostDir, ".sandcastle", "worktrees");
+    const leftover = existsSync(worktreesDir) ? readdirSync(worktreesDir) : [];
+    expect(leftover).toHaveLength(0);
+  });
+
   // --- copyToWorktree tests ---
 
   it("throws when copyToWorktree used with head strategy", async () => {
@@ -596,7 +619,7 @@ describe("interactive()", () => {
 
     await expect(
       interactive({
-        agent: claudeCode("claude-opus-4-6"),
+        agent: claudeCode("claude-opus-4-7"),
         sandbox: provider,
         prompt: "test",
         branchStrategy: { type: "head" },
@@ -617,7 +640,7 @@ describe("interactive()", () => {
 
     await expect(
       interactive({
-        agent: claudeCode("claude-opus-4-6"),
+        agent: claudeCode("claude-opus-4-7"),
         sandbox: provider,
         prompt: "test",
         branchStrategy: { type: "head" },
@@ -637,7 +660,7 @@ describe("interactive()", () => {
 
     try {
       await interactive({
-        agent: claudeCode("claude-opus-4-6"),
+        agent: claudeCode("claude-opus-4-7"),
         sandbox: provider,
         prompt: "test",
         branchStrategy: { type: "head" },
@@ -664,7 +687,7 @@ describe("interactive()", () => {
 
     await expect(
       interactive({
-        agent: claudeCode("claude-opus-4-6"),
+        agent: claudeCode("claude-opus-4-7"),
         sandbox: provider,
         prompt: "test",
         branchStrategy: { type: "head" },
@@ -675,7 +698,7 @@ describe("interactive()", () => {
 
   it("allows signal to be omitted", () => {
     const opts: InteractiveOptions = {
-      agent: claudeCode("claude-opus-4-6"),
+      agent: claudeCode("claude-opus-4-7"),
       prompt: "test",
     };
     expect(opts.signal).toBeUndefined();
@@ -684,7 +707,7 @@ describe("interactive()", () => {
   it("allows signal to be specified on InteractiveOptions", () => {
     const ac = new AbortController();
     const opts: InteractiveOptions = {
-      agent: claudeCode("claude-opus-4-6"),
+      agent: claudeCode("claude-opus-4-7"),
       prompt: "test",
       signal: ac.signal,
     };
@@ -717,7 +740,7 @@ describe("interactive()", () => {
     });
 
     const result = await interactive({
-      agent: claudeCode("claude-opus-4-6"),
+      agent: claudeCode("claude-opus-4-7"),
       sandbox: provider,
       prompt: "test",
       cwd: otherRepo,
@@ -738,7 +761,7 @@ describe("interactive()", () => {
     });
 
     const result = await interactive({
-      agent: claudeCode("claude-opus-4-6"),
+      agent: claudeCode("claude-opus-4-7"),
       sandbox: provider,
       prompt: "test",
       // no cwd option
@@ -765,7 +788,7 @@ describe("interactive()", () => {
     });
 
     await interactive({
-      agent: claudeCode("claude-opus-4-6"),
+      agent: claudeCode("claude-opus-4-7"),
       sandbox: provider,
       prompt: "test",
       branchStrategy: { type: "merge-to-head" },
