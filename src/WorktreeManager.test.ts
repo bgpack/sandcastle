@@ -482,6 +482,102 @@ describe("WorktreeManager.create", () => {
     await run(remove(first.path));
   });
 
+  it("preserves unpushed local commits when origin has not moved (ff-only no-op)", async () => {
+    // Strictly-ahead case: origin/<branch> is an ancestor of HEAD. `git merge
+    // --ff-only` must succeed as a no-op and leave the unpushed commit intact.
+    // Distinct from the no-origin path: here fetch *succeeds* and the merge
+    // call actually runs.
+    const { repoDir } = await setupRepoWithOrigin();
+
+    await execAsync("git checkout -b my-branch", { cwd: repoDir });
+    await commitFile(repoDir, "x.txt", "x", "branch commit");
+    await execAsync("git push -u origin my-branch", { cwd: repoDir });
+    await execAsync("git checkout main", { cwd: repoDir });
+
+    const first = await run(create(repoDir, { branch: "my-branch" }));
+
+    // Local commit; origin/my-branch stays put.
+    await commitFile(first.path, "local.txt", "local", "local-only commit");
+    const { stdout: localSha } = await execAsync("git rev-parse HEAD", {
+      cwd: first.path,
+    });
+
+    const second = await run(create(repoDir, { branch: "my-branch" }));
+
+    expect(second.path).toBe(first.path);
+    const { stdout: afterSha } = await execAsync("git rev-parse HEAD", {
+      cwd: second.path,
+    });
+    expect(afterSha.trim()).toBe(localSha.trim());
+    const localFile = await readFile(join(second.path, "local.txt"), "utf-8");
+    expect(localFile).toBe("local");
+
+    await run(remove(first.path));
+  });
+
+  it("does not advance HEAD past a mid-rebase pause (detached HEAD, clean tree)", async () => {
+    // A `git rebase` paused at an `edit`/`break`/`exec` instruction leaves
+    // HEAD detached at the pause point with a clean working tree — porcelain
+    // status is empty, so the dirty guard does not catch it. Without an
+    // explicit HEAD-attached check, `git merge --ff-only origin/<branch>`
+    // would silently advance HEAD past the pause point and `git rebase
+    // --continue` would then produce confused "empty cherry-pick" output.
+    const { repoDir, pushOrigin } = await setupRepoWithOrigin();
+
+    await execAsync("git checkout -b my-branch", { cwd: repoDir });
+    await commitFile(repoDir, "a.txt", "a", "branch commit 1");
+    await commitFile(repoDir, "b.txt", "b", "branch commit 2");
+    await execAsync("git push -u origin my-branch", { cwd: repoDir });
+    await execAsync("git checkout main", { cwd: repoDir });
+
+    const first = await run(create(repoDir, { branch: "my-branch" }));
+
+    // Pause the rebase mid-way: `--exec false` runs `false` after each
+    // cherry-pick, fails on the first one, and leaves HEAD detached with a
+    // clean working tree and a populated `rebase-merge` state directory.
+    await execAsync("git rebase --exec false HEAD~2", {
+      cwd: first.path,
+    }).catch(() => {});
+
+    const { stdout: pausedSha } = await execAsync("git rev-parse HEAD", {
+      cwd: first.path,
+    });
+
+    // Sanity: HEAD must actually be detached and the tree clean — the
+    // preconditions for the bug.
+    await expect(
+      execAsync("git symbolic-ref --quiet HEAD", { cwd: first.path }),
+    ).rejects.toThrow();
+    const { stdout: status } = await execAsync("git status --porcelain", {
+      cwd: first.path,
+    });
+    expect(status.trim()).toBe("");
+
+    // Move origin forward so the buggy code would have something to ff to.
+    await pushOrigin("my-branch", "new.txt", "new", "new origin commit");
+
+    const second = await run(create(repoDir, { branch: "my-branch" }));
+    expect(second.path).toBe(first.path);
+
+    const { stdout: afterSha } = await execAsync("git rev-parse HEAD", {
+      cwd: second.path,
+    });
+    expect(afterSha.trim()).toBe(pausedSha.trim());
+
+    // Rebase state must survive — `--continue` would otherwise be impossible.
+    const { stdout: rebaseMergePath } = await execAsync(
+      "git rev-parse --git-path rebase-merge",
+      { cwd: second.path },
+    );
+    const resolvedRebaseDir = rebaseMergePath.trim().startsWith("/")
+      ? rebaseMergePath.trim()
+      : join(second.path, rebaseMergePath.trim());
+    expect((await stat(resolvedRebaseDir)).isDirectory()).toBe(true);
+
+    await execAsync("git rebase --abort", { cwd: first.path }).catch(() => {});
+    await run(remove(first.path));
+  });
+
   it("reuses worktree with unpushed commits (not considered dirty)", async () => {
     const repoDir = await setupRepo();
     await execAsync("git checkout -b my-branch", { cwd: repoDir });

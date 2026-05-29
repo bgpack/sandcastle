@@ -196,6 +196,10 @@ const listWorktrees = (
  * On the clean-reuse path, fetches `origin/<branch>` into the worktree and
  * fast-forwards local HEAD. Skipped silently (with an explanatory log) when:
  *
+ * - HEAD is not attached to `<branch>` — a mid-rebase worktree paused at an
+ *   `edit`/`exec`/`break` instruction has a clean working tree but a detached
+ *   HEAD pointing at the pause point. `git merge --ff-only` there would
+ *   silently advance HEAD past the pause and break `git rebase --continue`;
  * - the fetch fails (no `origin`, unreachable network, branch missing on
  *   origin) — the worktree is reused as-is, never breaking the run; or
  * - the local branch has diverged from `origin/<branch>` (unpushed commits +
@@ -211,6 +215,22 @@ const fastForwardFromOrigin = (
   branch: string,
 ): Effect.Effect<void, never> =>
   Effect.gen(function* () {
+    // `symbolic-ref --quiet HEAD` exits non-zero when HEAD is detached;
+    // map both failure and an unexpected target to "" so the predicate
+    // below treats them the same as "not on this branch".
+    const headRef = yield* execGit(
+      ["symbolic-ref", "--quiet", "HEAD"],
+      worktreePath,
+    ).pipe(
+      Effect.map((s) => s.trim()),
+      Effect.orElseSucceed(() => ""),
+    );
+    if (headRef !== `refs/heads/${branch}`) {
+      console.log(
+        `Reusing worktree at ${worktreePath} (branch '${branch}') — HEAD is not on '${branch}', skipping origin refresh`,
+      );
+      return;
+    }
     const fetchResult = yield* Effect.either(
       execGit(
         [...NO_CONFIG_LOCK_FLAGS, "fetch", "origin", branch],
