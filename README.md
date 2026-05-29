@@ -1252,7 +1252,7 @@ hooks: {
 
 ```bash
 npm install
-npm run build    # Build with tsgo
+npm run build    # Bundle with tsup
 npm test         # Run tests with vitest
 npm run typecheck # Type-check
 ```
