@@ -144,6 +144,22 @@ describe("InitService scaffold", () => {
     expect(envExample).not.toContain("GH_TOKEN=");
   });
 
+  it("generates .env.example with GITEA_TOKEN, GITEA_URL, GITEA_REPO when issue tracker is gitea", async () => {
+    const dir = await makeDir();
+    await runScaffold(dir, {
+      issueTracker: getIssueTracker("gitea"),
+    });
+
+    const envExample = await readFile(
+      join(dir, ".sandcastle", ".env.example"),
+      "utf-8",
+    );
+    expect(envExample).toContain("GITEA_TOKEN=");
+    expect(envExample).toContain("GITEA_URL=");
+    expect(envExample).toContain("GITEA_REPO=");
+    expect(envExample).not.toContain("GH_TOKEN=");
+  });
+
   it("does not scaffold config.json for blank template", async () => {
     const dir = await makeDir();
     await runScaffold(dir);
@@ -1353,6 +1369,34 @@ describe("InitService scaffold", () => {
       expect(managers.some((m) => m.name === "custom")).toBe(true);
     });
 
+    it("listIssueTrackers includes gitea", () => {
+      const managers = listIssueTrackers();
+      expect(managers.some((m) => m.name === "gitea")).toBe(true);
+    });
+
+    it("getIssueTracker returns gitea entry with expected templateArgs", () => {
+      const manager = getIssueTracker("gitea");
+      expect(manager).toBeDefined();
+      expect(manager!.label).toBe("Gitea Issues");
+      expect(manager!.templateArgs.LIST_TASKS_COMMAND).toContain("curl");
+      expect(manager!.templateArgs.LIST_TASKS_COMMAND).toContain(
+        "/api/v1/repos/$GITEA_REPO/issues",
+      );
+      expect(manager!.templateArgs.LIST_TASKS_COMMAND).toContain("state=open");
+      expect(manager!.templateArgs.LIST_TASKS_COMMAND).toContain("jq");
+      expect(manager!.templateArgs.VIEW_TASK_COMMAND).toContain("curl");
+      expect(manager!.templateArgs.VIEW_TASK_COMMAND).toContain("<ID>");
+      expect(manager!.templateArgs.VIEW_TASK_COMMAND).toContain("/comments");
+      expect(manager!.templateArgs.CLOSE_TASK_COMMAND).toContain("curl");
+      expect(manager!.templateArgs.CLOSE_TASK_COMMAND).toContain("<ID>");
+      expect(manager!.templateArgs.CLOSE_TASK_COMMAND).toContain(
+        '"state":"closed"',
+      );
+      expect(manager!.envExample).toContain("GITEA_TOKEN=");
+      expect(manager!.envExample).toContain("GITEA_URL=");
+      expect(manager!.envExample).toContain("GITEA_REPO=");
+    });
+
     it("getIssueTracker returns undefined for unknown manager", () => {
       expect(getIssueTracker("nonexistent")).toBeUndefined();
     });
@@ -1440,6 +1484,25 @@ describe("InitService scaffold", () => {
         "utf-8",
       );
       expect(prompt).not.toContain("--label Sandcastle");
+    });
+
+    it("simple-loop with gitea produces prompt with curl/Gitea API commands", async () => {
+      const dir = await makeDir();
+      await runScaffold(dir, {
+        templateName: "simple-loop",
+        issueTracker: getIssueTracker("gitea"),
+      });
+
+      const prompt = await readFile(
+        join(dir, ".sandcastle", "prompt.md"),
+        "utf-8",
+      );
+      expect(prompt).toContain("curl");
+      expect(prompt).toContain("/api/v1/repos/");
+      expect(prompt).toContain('"state":"closed"');
+      expect(prompt).not.toContain("gh issue list");
+      expect(prompt).not.toContain("{{LIST_TASKS_COMMAND}}");
+      expect(prompt).not.toContain("{{CLOSE_TASK_COMMAND}}");
     });
 
     it("simple-loop with github-issues retains --label Sandcastle when createLabel is true", async () => {
