@@ -9,9 +9,7 @@ set -euo pipefail
 # Remove a branch here once it's merged upstream.
 # `fork/maintenance` carries this script + the docs; keep it in the list.
 BRANCHES=(
-  feat/gitea-backlog-manager
-  fix/dockerfile-existing-group-gid
-  fix/git-c-locale
+  feat/gitea-issue-tracker
   fork/maintenance
 )
 
