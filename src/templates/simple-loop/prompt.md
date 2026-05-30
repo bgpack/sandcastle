@@ -4,7 +4,7 @@
 
 !`{{LIST_TASKS_COMMAND}}`
 
-The list above has already been filtered to issues ready for work. Do not run your own unfiltered query to find more issues — if the list is empty, there is nothing to do.
+The list above has already been filtered to issues ready for work and is the sole source of truth for what work exists. Do not run your own unfiltered query to find more issues. **If the block above is empty (`[]` or no issues), you are done — skip directly to the `# Done` section and emit `<promise>COMPLETE</promise>` without running any other commands or queries.**
 
 ## Recent RALPH commits (last 10)
 
@@ -27,6 +27,8 @@ Pick the highest-priority open issue that is not blocked by another open issue.
 
 ## Workflow
 
+**Before picking an issue:** if the open-issues block at the top of this prompt is empty (`[]` or no issues), stop. Do not query, do not search — skip to `# Done` and emit `<promise>COMPLETE</promise>`.
+
 1. **Explore** — read the issue carefully. Pull in the parent PRD if referenced. Read the relevant source files and tests before writing any code.
 2. **Plan** — decide what to change and why. Keep the change as small as possible.
 3. **Execute** — use RGR (Red → Green → Repeat → Refactor): write a failing test first, then write the implementation to pass it.
@@ -48,6 +50,6 @@ Pick the highest-priority open issue that is not blocked by another open issue.
 
 # Done
 
-When all actionable issues are complete (or you are blocked on all remaining ones), output the completion signal:
+When all actionable issues are complete (or you are blocked on all remaining ones), or the open-issues block at the top of this prompt is empty, output the completion signal:
 
 <promise>COMPLETE</promise>

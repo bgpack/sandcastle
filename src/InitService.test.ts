@@ -457,7 +457,31 @@ describe("InitService scaffold", () => {
       expect(prompt).toContain(
         "already been filtered to issues ready for work",
       );
+      expect(prompt).toContain("sole source of truth");
       expect(prompt).toContain("Do not run your own unfiltered query");
+    });
+
+    it("implement-prompt.md instructs the agent to stop on an empty issue list in Open issues, Workflow, and Done sections", async () => {
+      const dir = await makeDir();
+      await runScaffold(dir, { templateName: "sequential-reviewer" });
+
+      const prompt = await readFile(
+        join(dir, ".sandcastle", "implement-prompt.md"),
+        "utf-8",
+      );
+
+      // The empty-list directive must appear in the imperative Workflow
+      // section, not just the informational Open issues block — otherwise
+      // a literal-minded agent reading "Pick the highest-priority open
+      // issue" can ignore the soft hint above and re-query.
+      const workflowSection = prompt.split("## Workflow")[1]!.split(/^#/m)[0]!;
+      expect(workflowSection).toMatch(/empty/i);
+      expect(workflowSection).toContain("<promise>COMPLETE</promise>");
+
+      // The Done section must explicitly equate an empty list with the
+      // completion state.
+      const doneSection = prompt.split("# Done")[1]!;
+      expect(doneSection).toMatch(/empty/i);
     });
 
     it("review-prompt.md contains {{BRANCH}} prompt argument", async () => {
@@ -1508,7 +1532,25 @@ describe("InitService scaffold", () => {
       expect(prompt).toContain(
         "already been filtered to issues ready for work",
       );
+      expect(prompt).toContain("sole source of truth");
       expect(prompt).toContain("Do not run your own unfiltered query");
+    });
+
+    it("simple-loop prompt instructs the agent to stop on an empty issue list in Open issues, Workflow, and Done sections", async () => {
+      const dir = await makeDir();
+      await runScaffold(dir, { templateName: "simple-loop" });
+
+      const prompt = await readFile(
+        join(dir, ".sandcastle", "prompt.md"),
+        "utf-8",
+      );
+
+      const workflowSection = prompt.split("## Workflow")[1]!.split(/^#/m)[0]!;
+      expect(workflowSection).toMatch(/empty/i);
+      expect(workflowSection).toContain("<promise>COMPLETE</promise>");
+
+      const doneSection = prompt.split("# Done")[1]!;
+      expect(doneSection).toMatch(/empty/i);
     });
 
     // --- custom issue tracker ---
