@@ -2,11 +2,18 @@
 
 This fork keeps `main` as a clean mirror of `mattpocock/sandcastle:main`. Local
 patches that aren't yet merged upstream live on individual feature branches and
-are integrated into `bgpack-main`, which is what downstream projects consume.
+are integrated into a versioned integration branch, which is what downstream
+projects consume.
+
+The integration branch is named after the upstream release it's built on —
+currently **`bgpack-main-0.7.0`** (set via `INTEGRATION_BRANCH` in the rebuild
+script). Bump it on each upstream minor so existing downstream pins stay stable.
+References to `bgpack-main` below mean whatever `INTEGRATION_BRANCH` currently
+points at.
 
 ```
 upstream/main ──fast-forward──▶ main ──┐
-                                       ├── octopus-merge ──▶ bgpack-main
+                                       ├── octopus-merge ──▶ bgpack-main-<upstream-version>
 feat/*, fix/*, fork/maintenance ───────┘
 ```
 
@@ -85,7 +92,7 @@ In a downstream project's `package.json`:
 ```json
 {
   "dependencies": {
-    "@ai-hero/sandcastle": "github:bgpack/sandcastle#bgpack-main"
+    "@ai-hero/sandcastle": "github:bgpack/sandcastle#bgpack-main-0.7.0"
   }
 }
 ```

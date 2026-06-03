@@ -1,8 +1,13 @@
 #!/usr/bin/env bash
-# Rebuilds `bgpack-main` from scratch as: upstream/main + every branch in BRANCHES.
-# See FORK_MAINTENANCE.md for the full workflow.
+# Rebuilds the integration branch from scratch as: upstream/main + every branch
+# in BRANCHES. See FORK_MAINTENANCE.md for the full workflow.
 
 set -euo pipefail
+
+# The integration branch consumed by downstream projects. Versioned to track
+# the upstream release it's built on — bump this when upstream releases a new
+# minor (e.g. bgpack-main-0.7.0 -> bgpack-main-0.8.0) so old pins stay stable.
+INTEGRATION_BRANCH=bgpack-main-0.7.0
 
 # Branches to stack on top of upstream/main.
 # Add a branch here when you create a new local patch.
@@ -25,15 +30,15 @@ if ! git merge --ff-only upstream/main; then
 fi
 git push origin main
 
-echo "==> Rebuilding bgpack-main from main"
-git branch -D bgpack-main 2>/dev/null || true
-git checkout -b bgpack-main main
+echo "==> Rebuilding $INTEGRATION_BRANCH from main"
+git branch -D "$INTEGRATION_BRANCH" 2>/dev/null || true
+git checkout -b "$INTEGRATION_BRANCH" main
 
 echo "==> Merging branches: ${BRANCHES[*]}"
 git merge --no-ff "${BRANCHES[@]}" \
   -m "Integrate: $(IFS=', '; echo "${BRANCHES[*]}")"
 
-echo "==> Force-pushing bgpack-main"
-git push --force-with-lease origin bgpack-main
+echo "==> Force-pushing $INTEGRATION_BRANCH"
+git push --force-with-lease origin "$INTEGRATION_BRANCH"
 
-echo "==> Done. bgpack-main = upstream/main + ${#BRANCHES[@]} branches."
+echo "==> Done. $INTEGRATION_BRANCH = upstream/main + ${#BRANCHES[@]} branches."
