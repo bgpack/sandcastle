@@ -189,7 +189,7 @@ describe("InitService scaffold", () => {
     expect(dockerfile).toContain(SANDBOX_REPO_DIR);
   });
 
-  it.each([claudeCodeAgent, piAgent, codexAgent, opencodeAgent])(
+  it.each([claudeCodeAgent, piAgent, codexAgent, opencodeAgent, cursorAgent])(
     "$name Dockerfile aligns UID/GID with -o so a host GID colliding with a reserved base-image GID (e.g. macOS staff=20) doesn't fail the build",
     async (agent) => {
       const dir = await makeDir();
