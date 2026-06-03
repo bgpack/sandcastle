@@ -15,6 +15,7 @@ INTEGRATION_BRANCH=bgpack-main-0.7.0
 # `fork/maintenance` carries this script + the docs; keep it in the list.
 BRANCHES=(
   feat/gitea-issue-tracker
+  fix/cursor-dockerfile-group-gid
   fork/maintenance
 )
 
