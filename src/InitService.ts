@@ -514,6 +514,10 @@ RUN curl -fsSL https://raw.githubusercontent.com/steveyegge/beads/main/scripts/i
 
 RUN corepack enable`;
 
+// Gitea talks to the REST API via curl + jq, both already present in the agent
+// base image, so no extra tooling needs to be installed.
+const GITEA_TOOLS = ``;
+
 // Sentinels baked into the scaffold for the `custom` issue tracker. The
 // project ships deliberately broken-until-configured; the setup agent finds
 // and replaces these markers in place (see SETUP_ISSUE_TRACKER.md). Defined as
@@ -558,8 +562,7 @@ GH_TOKEN=`,
       LIST_TASKS_COMMAND: `curl -fsSL -H "Authorization: token $GITEA_TOKEN" "$GITEA_URL/api/v1/repos/$GITEA_REPO/issues?type=issues&state=open&labels=Sandcastle&limit=50" | jq '[.[] | {number, title, body, labels: [.labels[].name]}]'`,
       VIEW_TASK_COMMAND: `curl -fsSL -H "Authorization: token $GITEA_TOKEN" "$GITEA_URL/api/v1/repos/$GITEA_REPO/issues/<ID>" | jq '{number, title, body, labels: [.labels[].name], state}' && curl -fsSL -H "Authorization: token $GITEA_TOKEN" "$GITEA_URL/api/v1/repos/$GITEA_REPO/issues/<ID>/comments" | jq '[.[] | {author: .user.login, body}]'`,
       CLOSE_TASK_COMMAND: `curl -fsSL -o /dev/null -X PATCH -H "Authorization: token $GITEA_TOKEN" -H "Content-Type: application/json" -d '{"state":"closed"}' "$GITEA_URL/api/v1/repos/$GITEA_REPO/issues/<ID>"`,
-      // Gitea uses the REST API via curl + jq, both already present in the agent base image.
-      ISSUE_TRACKER_TOOLS: ``,
+      ISSUE_TRACKER_TOOLS: GITEA_TOOLS,
     },
     envExample: `# Gitea server URL (e.g. https://gitea.example.com)
 GITEA_URL=
