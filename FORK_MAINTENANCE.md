@@ -6,7 +6,7 @@ are integrated into a versioned integration branch, which is what downstream
 projects consume.
 
 The integration branch is named after the upstream release it's built on —
-currently **`bgpack-main-0.7.0`** (set via `INTEGRATION_BRANCH` in the rebuild
+currently **`bgpack-main-0.8.0`** (set via `INTEGRATION_BRANCH` in the rebuild
 script). Bump it on each upstream minor so existing downstream pins stay stable.
 References to `bgpack-main` below mean whatever `INTEGRATION_BRANCH` currently
 points at.
@@ -92,7 +92,7 @@ In a downstream project's `package.json`:
 ```json
 {
   "dependencies": {
-    "@ai-hero/sandcastle": "github:bgpack/sandcastle#bgpack-main-0.7.0"
+    "@ai-hero/sandcastle": "github:bgpack/sandcastle#bgpack-main-0.8.0"
   }
 }
 ```

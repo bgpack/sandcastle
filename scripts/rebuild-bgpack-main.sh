@@ -6,8 +6,8 @@ set -euo pipefail
 
 # The integration branch consumed by downstream projects. Versioned to track
 # the upstream release it's built on — bump this when upstream releases a new
-# minor (e.g. bgpack-main-0.7.0 -> bgpack-main-0.8.0) so old pins stay stable.
-INTEGRATION_BRANCH=bgpack-main-0.7.0
+# minor (e.g. bgpack-main-0.8.0 -> bgpack-main-0.9.0) so old pins stay stable.
+INTEGRATION_BRANCH=bgpack-main-0.8.0
 
 # Branches to stack on top of upstream/main.
 # Add a branch here when you create a new local patch.
