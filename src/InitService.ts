@@ -323,7 +323,7 @@ ARG AGENT_UID=1000
 ARG AGENT_GID=1000
 
 # Rename the base image's "node" user to "agent" and align UID/GID.
-RUN groupmod -g $AGENT_GID node && usermod -u $AGENT_UID -g $AGENT_GID -d /home/agent -m -l agent node
+RUN groupmod -o -g $AGENT_GID node && usermod -o -u $AGENT_UID -g $AGENT_GID -d /home/agent -m -l agent node
 USER \${AGENT_UID}:\${AGENT_GID}
 
 # Install Cursor Agent CLI
@@ -514,6 +514,10 @@ RUN curl -fsSL https://raw.githubusercontent.com/steveyegge/beads/main/scripts/i
 
 RUN corepack enable`;
 
+// Gitea talks to the REST API via curl + jq, both already present in the agent
+// base image, so no extra tooling needs to be installed.
+const GITEA_TOOLS = ``;
+
 // Sentinels baked into the scaffold for the `custom` issue tracker. The
 // project ships deliberately broken-until-configured; the setup agent finds
 // and replaces these markers in place (see SETUP_ISSUE_TRACKER.md). Defined as
@@ -550,6 +554,22 @@ GH_TOKEN=`,
       ISSUE_TRACKER_TOOLS: BEADS_TOOLS,
     },
     envExample: "",
+  },
+  {
+    name: "gitea",
+    label: "Gitea Issues",
+    templateArgs: {
+      LIST_TASKS_COMMAND: `curl -fsSL -H "Authorization: token $GITEA_TOKEN" "$GITEA_URL/api/v1/repos/$GITEA_REPO/issues?type=issues&state=open&labels=Sandcastle&limit=50" | jq '[.[] | {number, title, body, labels: [.labels[].name]}]'`,
+      VIEW_TASK_COMMAND: `curl -fsSL -H "Authorization: token $GITEA_TOKEN" "$GITEA_URL/api/v1/repos/$GITEA_REPO/issues/<ID>" | jq '{number, title, body, labels: [.labels[].name], state}' && curl -fsSL -H "Authorization: token $GITEA_TOKEN" "$GITEA_URL/api/v1/repos/$GITEA_REPO/issues/<ID>/comments" | jq '[.[] | {author: .user.login, body}]'`,
+      CLOSE_TASK_COMMAND: `curl -fsSL -o /dev/null -X PATCH -H "Authorization: token $GITEA_TOKEN" -H "Content-Type: application/json" -d '{"state":"closed"}' "$GITEA_URL/api/v1/repos/$GITEA_REPO/issues/<ID>"`,
+      ISSUE_TRACKER_TOOLS: GITEA_TOOLS,
+    },
+    envExample: `# Gitea server URL (e.g. https://gitea.example.com)
+GITEA_URL=
+# Gitea personal access token
+GITEA_TOKEN=
+# Gitea repository in owner/repo format (e.g. my-org/my-project)
+GITEA_REPO=`,
   },
   {
     name: "custom",
